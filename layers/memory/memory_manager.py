@@ -36,22 +36,32 @@ class MemoryManager:
         self,
         chroma_path: str = "./data/chroma_db",
         embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2",
-        short_term_capacity: int = 20
+        short_term_capacity: int = 20,
+        clear_on_init: bool = False
     ):
         self.short_term_capacity = short_term_capacity
         self.short_term_buffer: List[ConversationTurn] = []
         
-        self._init_chromadb(chroma_path)
+        self._init_chromadb(chroma_path, clear_on_init)
         
         logger.info(f"Loading embedding model: {embedding_model}")
         self.embedding_model = SentenceTransformer(embedding_model)
         logger.info("Embedding model loaded")
     
-    def _init_chromadb(self, path: str):
+    def _init_chromadb(self, path: str, clear: bool):
         """Initializes ChromaDB."""
         try:
             self.chroma_client = chromadb.PersistentClient(path=path)
             
+            if clear:
+                logger.warning("Clearing existing database collections as requested.")
+                try:
+                    self.chroma_client.delete_collection(name="episodic_memory")
+                    self.chroma_client.delete_collection(name="semantic_memory")
+                    logger.info("Database collections cleared.")
+                except Exception as e:
+                    logger.warning(f"Could not delete collections (they may not exist): {e}")
+
             self.episodic_memory = self.chroma_client.get_or_create_collection(
                 name="episodic_memory",
                 metadata={"description": "Conversation history"}

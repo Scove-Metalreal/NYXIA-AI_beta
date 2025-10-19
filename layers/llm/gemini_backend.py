@@ -42,38 +42,36 @@ class GeminiBackend:
         stream: bool = False
     ) -> str:
         """Generates a response from the Gemini model."""
-        # Gemini uses a different message format, so we need to adapt it.
-        # It expects a list of dictionaries with 'role' and 'parts'.
-        # The roles are 'user' and 'model'.
         gemini_messages = []
         system_prompt = ""
         for msg in messages:
             if msg['role'] == 'system':
                 system_prompt = msg['content']
-                continue # System prompt is handled separately in Gemini
+                continue
             
-            # Replace 'assistant' with 'model' for the role
             role = 'model' if msg['role'] == 'assistant' else msg['role']
             gemini_messages.append({'role': role, 'parts': [msg['content']]})
 
         try:
-            # The system prompt is passed separately in the new API
             generation_config = genai.types.GenerationConfig(
                 max_output_tokens=self.max_tokens,
                 temperature=self.temperature
             )
             
             if stream:
-                # Streaming is handled differently and would require a different implementation
-                # For now, we will use the non-streaming version for simplicity.
                 logger.warning("Streaming is not yet implemented for the Gemini backend.")
 
             response = self.model.generate_content(
                 contents=gemini_messages,
                 generation_config=generation_config,
-                # The system instruction can be passed here if needed, though it's often part of the initial messages
+                # The system instruction can be passed here if needed
             )
             
+            # Check for blocked response before accessing .text
+            if not response.candidates or response.candidates[0].finish_reason == 'SAFETY':
+                logger.warning(f"Gemini response was blocked. Finish Reason: {response.candidates[0].finish_reason if response.candidates else 'N/A'}. Ratings: {response.candidates[0].safety_ratings if response.candidates else 'N/A'}")
+                return "[SAFETY_BLOCKED]"
+
             return response.text
                 
         except Exception as e:

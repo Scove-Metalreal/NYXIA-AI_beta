@@ -28,8 +28,8 @@ system:
 
   # LLM (The Consciousness) - Settings for a responsive Misa
   llm:
-    backend: "gemini" # "ollama" or "gemini"
-    ollama_model: "qwen2.5:7b"
+    backend: "ollama" # "ollama" or "gemini"
+    ollama_model: "interactive"
     gemini_model: "models/gemini-2.5-pro"
     timeout: 60 # seconds. Sometimes deep thoughts take time. Let's give Misa more room to think.
     retry_attempts: 2
