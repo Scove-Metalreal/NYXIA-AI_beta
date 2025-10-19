@@ -1,4 +1,4 @@
-# NYXIA AI - Multi-Layer Architecture
+# Misa - An AI Companion
 
 An AI assistant with a multi-layer architecture, featuring its own personality, long-term memory, and emotional system.
 
