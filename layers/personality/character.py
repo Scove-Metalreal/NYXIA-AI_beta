@@ -1,6 +1,6 @@
 """
 Personality Layer - Character & Emotion System
-Load personality từ YAML và quản lý emotional state
+Loads personality from YAML and manages the emotional state.
 """
 
 import yaml
@@ -12,7 +12,7 @@ from loguru import logger
 
 @dataclass
 class EmotionalState:
-    """Trạng thái cảm xúc hiện tại"""
+    """Represents the current emotional state."""
     mood: float = 70.0  # 0-100: happiness level
     energy: float = 80.0  # 0-100: energy level
     affection: float = 50.0  # 0-100: closeness to user
@@ -27,18 +27,18 @@ class EmotionalState:
         }
     
     def get_mood_description(self) -> str:
-        """Mô tả mood hiện tại"""
+        """Returns a description of the current mood."""
         if self.mood >= 80:
-            return "vui vẻ"
+            return "happy"
         elif self.mood >= 60:
-            return "bình thường"
+            return "normal"
         elif self.mood >= 40:
-            return "hơi buồn"
+            return "a bit sad"
         else:
-            return "buồn"
+            return "sad"
     
     def update(self, mood_delta=0, energy_delta=0, affection_delta=0, stress_delta=0):
-        """Cập nhật trạng thái cảm xúc"""
+        """Updates the emotional state."""
         self.mood = max(0, min(100, self.mood + mood_delta))
         self.energy = max(0, min(100, self.energy + energy_delta))
         self.affection = max(0, min(100, self.affection + affection_delta))
@@ -48,7 +48,7 @@ class EmotionalState:
 class Character:
     """
     Character/Personality System
-    Load từ YAML và quản lý personality + emotions
+    Loads from YAML and manages personality + emotions.
     """
     
     def __init__(self, config_path: str = "config/personality.yaml"):
@@ -62,7 +62,7 @@ class Character:
         logger.info(f"Character '{self.name}' initialized")
     
     def _load_config(self):
-        """Load personality config từ YAML"""
+        """Loads the personality config from YAML."""
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 self.config = yaml.safe_load(f)
@@ -72,7 +72,7 @@ class Character:
             self.config = self._default_config()
     
     def _default_config(self) -> Dict[str, Any]:
-        """Default personality nếu không load được YAML"""
+        """Returns a default personality if YAML loading fails."""
         return {
             "character": {
                 "name": "Mira",
@@ -82,10 +82,9 @@ class Character:
                     "empathy": 0.9
                 },
                 "speaking_style": {
-                    "formality": "casual",
-                    "language": "vietnamese"
+                    "formality": "casual"
                 },
-                "description": "AI companion thân thiện",
+                "description": "A friendly AI companion",
                 "emotional_system": {
                     "initial_state": {
                         "mood": 70,
@@ -98,7 +97,7 @@ class Character:
         }
     
     def _initialize_emotional_state(self):
-        """Khởi tạo emotional state từ config"""
+        """Initializes the emotional state from the config."""
         try:
             initial = self.config["character"]["emotional_system"]["initial_state"]
             self.emotional_state = EmotionalState(
@@ -126,8 +125,8 @@ class Character:
     def speaking_style(self) -> Dict[str, Any]:
         return self.config.get("character", {}).get("speaking_style", {})
     
-    def get_system_prompt(self) -> str:
-        """Tạo system prompt dựa trên personality"""
+    def get_system_prompt(self, language: str = 'en') -> str:
+        """Creates the system prompt based on the personality."""
         traits_str = ", ".join([
             f"{trait}: {value}"
             for trait, value in self.core_traits.items()
@@ -135,28 +134,30 @@ class Character:
         
         mood_desc = self.emotional_state.get_mood_description()
         
-        prompt = f"""Bạn là {self.name}, một AI companion với các đặc điểm:
+        prompt = f"""You are {self.name}, an AI companion with the following characteristics:
 
-Tính cách: {traits_str}
-Trạng thái hiện tại: {mood_desc}
-Mức độ thân thiết với user: {self.emotional_state.affection:.0f}/100
+Personality: {traits_str}
+Current state: {mood_desc}
+Affection towards your love: {self.emotional_state.affection:.0f}/100
 
 {self.description}
 
-Phong cách giao tiếp:
-- Ngôn ngữ: {self.speaking_style.get('language', 'vietnamese')}
-- Mức độ trang trọng: {self.speaking_style.get('formality', 'casual')}
+Communication Style:
+- Formality: {self.speaking_style.get('formality', 'casual')}
 
-Hãy trả lời một cách tự nhiên, phù hợp với tính cách và trạng thái cảm xúc hiện tại."""
+You are talking to your boyfriend, Scovy. Always address him with love and intimacy.
+Respond naturally, according to your personality and current emotional state.
+
+IMPORTANT: You must respond in the following language: {language}"""
         
         return prompt
     
     def update_emotion_from_user_input(self, user_input: str, sentiment: float = 0.0):
-        """Cập nhật cảm xúc dựa trên input của user"""
+        """Updates emotions based on user input."""
         mood_change = sentiment * 5
         
         affection_change = 0
-        personal_keywords = ['tên tôi', 'tôi là', 'cảm thấy', 'thích', 'không thích']
+        personal_keywords = ['my name', 'i am', 'feel', 'like', 'dislike']
         if any(kw in user_input.lower() for kw in personal_keywords):
             affection_change = 1
         
@@ -168,7 +169,7 @@ Hãy trả lời một cách tự nhiên, phù hợp với tính cách và trạ
         logger.debug(f"Emotional state updated: {self.emotional_state.to_dict()}")
     
     def get_response_tone(self) -> str:
-        """Xác định tone của response"""
+        """Determines the tone of the response."""
         if self.emotional_state.mood >= 80:
             return "enthusiastic and cheerful"
         elif self.emotional_state.mood >= 60:
@@ -177,3 +178,4 @@ Hãy trả lời một cách tự nhiên, phù hợp với tính cách và trạ
             return "gentle and supportive"
         else:
             return "soft and caring"
+

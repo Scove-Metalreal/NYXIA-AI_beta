@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 AI Assistant - Main Entry Point
-Multi-layer architecture với personality và memory
+Multi-layer architecture with personality and memory
 """
 
 import os

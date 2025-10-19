@@ -9,7 +9,7 @@ import os
 
 
 class OllamaBackend:
-    """Backend cho Ollama"""
+    """Backend for Ollama"""
     
     def __init__(
         self,
@@ -25,7 +25,7 @@ class OllamaBackend:
         logger.info(f"Ollama backend initialized with model: {self.model}")
     
     def _verify_model(self):
-        """Kiểm tra model có sẵn không"""
+        """Verifies that the model is available."""
         try:
             models = ollama.list()
             available = [m['name'] for m in models['models']]
@@ -44,7 +44,7 @@ class OllamaBackend:
         messages: List[Dict[str, str]],
         stream: bool = False
     ) -> str:
-        """Generate response từ Ollama"""
+        """Generates a response from Ollama."""
         try:
             response = ollama.chat(
                 model=self.model,
@@ -53,6 +53,7 @@ class OllamaBackend:
                 options={
                     "temperature": self.temperature,
                     "num_predict": self.max_tokens,
+                    "num_gpu": 999,
                 }
             )
             
@@ -63,10 +64,10 @@ class OllamaBackend:
                 
         except Exception as e:
             logger.error(f"Ollama generation failed: {e}")
-            return "Xin lỗi, tôi gặp lỗi khi xử lý. Bạn thử lại được không?"
+            return "Sorry, I encountered an error while processing. Could you please try again?"
     
     def _handle_stream(self, response) -> str:
-        """Handle streaming response"""
+        """Handles a streaming response."""
         full_response = ""
         try:
             for chunk in response:

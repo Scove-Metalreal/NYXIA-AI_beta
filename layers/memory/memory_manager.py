@@ -14,7 +14,7 @@ from loguru import logger
 
 @dataclass
 class ConversationTurn:
-    """Một turn trong hội thoại"""
+    """Represents one turn in a conversation."""
     user_input: str
     ai_response: str
     timestamp: float
@@ -30,7 +30,7 @@ class ConversationTurn:
 
 
 class MemoryManager:
-    """Quản lý cả short-term và long-term memory"""
+    """Manages both short-term and long-term memory."""
     
     def __init__(
         self,
@@ -48,7 +48,7 @@ class MemoryManager:
         logger.info("Embedding model loaded")
     
     def _init_chromadb(self, path: str):
-        """Khởi tạo ChromaDB"""
+        """Initializes ChromaDB."""
         try:
             self.chroma_client = chromadb.PersistentClient(path=path)
             
@@ -68,7 +68,7 @@ class MemoryManager:
             raise
     
     def add_turn(self, user_input: str, ai_response: str, metadata: Dict = None):
-        """Thêm một conversation turn"""
+        """Adds a conversation turn and consolidates it to long-term memory."""
         turn = ConversationTurn(
             user_input=user_input,
             ai_response=ai_response,
@@ -76,44 +76,46 @@ class MemoryManager:
             metadata=metadata
         )
         
+        # Add to short-term buffer and manage its size
         self.short_term_buffer.append(turn)
-        
         if len(self.short_term_buffer) > self.short_term_capacity:
-            old_turn = self.short_term_buffer.pop(0)
-            self._consolidate_to_long_term(old_turn)
+            self.short_term_buffer.pop(0)
         
-        logger.debug(f"Turn added. Buffer size: {len(self.short_term_buffer)}")
+        # Immediately consolidate the new turn to long-term memory
+        self._consolidate_to_long_term(turn)
+        
+        logger.debug(f"Turn added and consolidated. Buffer size: {len(self.short_term_buffer)}")
     
     def _consolidate_to_long_term(self, turn: ConversationTurn):
-        """Chuyển turn từ short-term sang long-term memory"""
+        """Consolidates a turn from short-term to long-term memory."""
         try:
             text = f"User: {turn.user_input}\nAI: {turn.ai_response}"
             embedding = self.embedding_model.encode(text).tolist()
             importance = self._calculate_importance(turn)
             
-            if importance >= 0.3:
-                self.episodic_memory.add(
-                    documents=[text],
-                    embeddings=[embedding],
-                    metadatas=[{
-                        "timestamp": turn.timestamp,
-                        "importance": importance,
-                        "user_input": turn.user_input[:200],
-                        "ai_response": turn.ai_response[:200]
-                    }],
-                    ids=[f"turn_{int(turn.timestamp)}"]
-                )
-                logger.debug(f"Turn consolidated with importance {importance:.2f}")
+            # Save to episodic memory
+            self.episodic_memory.add(
+                documents=[text],
+                embeddings=[embedding],
+                metadatas=[{
+                    "timestamp": turn.timestamp,
+                    "importance": importance,
+                    "user_input": turn.user_input[:200],
+                    "ai_response": turn.ai_response[:200]
+                }],
+                ids=[f"turn_{int(turn.timestamp * 1000)}"] # More precise ID
+            )
+            logger.debug(f"Turn consolidated with importance {importance:.2f}")
         except Exception as e:
             logger.error(f"Failed to consolidate turn: {e}")
     
     def _calculate_importance(self, turn: ConversationTurn) -> float:
-        """Tính importance score của một turn"""
+        """Calculates the importance score of a turn."""
         score = 0.3
         text = turn.user_input.lower()
         
-        high_keywords = ['tên tôi', 'tôi là', 'gia đình', 'công việc', 'yêu', 'ghét', 'cảm thấy']
-        medium_keywords = ['thích', 'không thích', 'thường', 'hay', 'luôn']
+        high_keywords = ['my name is', 'i am', 'family', 'work', 'love', 'hate', 'feel']
+        medium_keywords = ['like', 'dislike', 'often', 'usually', 'always']
         
         for kw in high_keywords:
             if kw in text:
@@ -134,7 +136,7 @@ class MemoryManager:
         n_results: int = 5,
         importance_threshold: float = 0.3
     ) -> List[str]:
-        """Truy xuất memories liên quan đến query"""
+        """Retrieves memories relevant to a query."""
         try:
             query_embedding = self.embedding_model.encode(query).tolist()
             
@@ -154,10 +156,10 @@ class MemoryManager:
             return []
     
     def save_fact(self, fact: str, category: str = "general"):
-        """Lưu một fact về user vào semantic memory"""
+        """Saves a fact about the user to semantic memory."""
         try:
             embedding = self.embedding_model.encode(fact).tolist()
-            fact_id = f"fact_{int(time.time())}_{category}"
+            fact_id = f"fact_{int(time.time() * 1000)}"
             
             self.semantic_memory.add(
                 documents=[fact],
@@ -174,7 +176,7 @@ class MemoryManager:
             logger.error(f"Failed to save fact: {e}")
     
     def get_short_term_context(self, max_turns: int = 5) -> List[Dict[str, str]]:
-        """Lấy context từ short-term memory"""
+        """Gets context from short-term memory."""
         recent_turns = self.short_term_buffer[-max_turns:]
         
         messages = []
@@ -185,7 +187,7 @@ class MemoryManager:
         return messages
     
     def get_memory_stats(self) -> Dict[str, Any]:
-        """Thống kê memory"""
+        """Gets memory statistics."""
         return {
             "short_term_size": len(self.short_term_buffer),
             "episodic_count": len(self.episodic_memory.get()['ids']),
@@ -193,19 +195,35 @@ class MemoryManager:
         }
     
     def clear_short_term(self):
-        """Xóa short-term memory"""
+        """Clears short-term memory."""
         self.short_term_buffer.clear()
         logger.info("Short-term memory cleared")
-    
-    def extract_and_save_facts(self, user_input: str):
-        """Tự động extract facts từ user input"""
-        text = user_input.lower()
-        
-        if "tên tôi là" in text or "tôi là" in text:
-            self.save_fact(user_input, category="personal_info")
-        elif "tôi thích" in text or "tôi yêu" in text:
-            self.save_fact(user_input, category="preference")
-        elif "tôi không thích" in text or "tôi ghét" in text:
-            self.save_fact(user_input, category="preference")
-        elif "công việc" in text or "tôi làm" in text:
-            self.save_fact(user_input, category="work")
+
+    def load_recent_history(self, n_turns: int = 10):
+        """Load recent conversation history from ChromaDB"""
+        try:
+            history = self.episodic_memory.get(
+                limit=n_turns,
+                include=["metadatas"]
+            )
+            
+            if not history or not history['metadatas']:
+                logger.info("No history found in ChromaDB.")
+                return
+
+            # Sort by timestamp
+            sorted_history = sorted(history['metadatas'], key=lambda x: x['timestamp'])
+            
+            for record in sorted_history:
+                turn = ConversationTurn(
+                    user_input=record.get('user_input', ''),
+                    ai_response=record.get('ai_response', ''),
+                    timestamp=record.get('timestamp', 0),
+                    metadata={'importance': record.get('importance', 0)}
+                )
+                self.short_term_buffer.append(turn)
+            
+            logger.info(f"Loaded {len(self.short_term_buffer)} turns from history.")
+
+        except Exception as e:
+            logger.error(f"Failed to load history from ChromaDB: {e}")
