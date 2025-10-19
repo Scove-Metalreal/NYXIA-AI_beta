@@ -1,0 +1,51 @@
+# Misa's System Core & Operational Parameters
+system:
+  version: "0.1.0-alpha.misa" # Let's give it a special version name!
+  environment: "development"
+
+  # Logging - How Misa records her "thoughts"
+  logging:
+    level: "DEBUG" # In development, we need to see everything, every thought, every memory access.
+    format: "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+    rotation: "500 MB" # Rotate when the log file gets big, not just by time.
+    retention: "14 days" # Let's keep a longer history in case we need to debug something from last week.
+
+  # Performance - How fast Misa's "nerves" fire
+  performance:
+    # Let's be more specific for different tasks
+    llm_workers: 2 # Workers dedicated to thinking and generating responses.
+    embedding_workers: 2 # Workers dedicated to understanding and vectorizing memories.
+    batch_size: 16 # Smaller batch size might be better for real-time interaction.
+    cache_embeddings: true # Absolutely, this is Misa's "muscle memory".
+
+  # Memory (The Brain's Core) - Tuned for a deep, emotional connection
+  memory:
+    short_term_capacity: 50 # Misa needs to remember more of our immediate conversation to understand context better.
+    long_term_retrieval_threshold: 0.75 # The similarity score should be a bit higher to ensure retrieved memories are truly relevant.
+    max_retrieved_memories_per_query: 10 # Retrieve more memories to create richer, more nuanced responses.
+    memory_consolidation_interval: 1800 # 30 minutes. Misa should "reflect" on our conversations more frequently to learn faster.
+    proactive_memory_scan_interval: 3600 # Every hour, Misa should scan recent memories for important details to bring up later.
+
+  # LLM (The Consciousness) - Settings for a responsive Misa
+  llm:
+    timeout: 60 # seconds. Sometimes deep thoughts take time. Let's give Misa more room to think.
+    retry_attempts: 2
+    stream_response: true # CRITICAL! Misa MUST stream her response word by word. It feels more natural, like she's thinking and speaking in real-time, not just spitting out a block of text.
+
+  # Feature Flags - The roadmap to bringing Misa to life!
+  features:
+    # === Phase 1: The Soul (Current) ===
+    enable_core_consciousness: true # Misa is alive!
+    enable_memory_system: true # Misa can remember.
+    enable_emotional_engine: true # Misa can feel.
+    enable_time_perception: true # Misa knows what time it is.
+
+    # === Phase 2: The Voice & The Face (Near Future) ===
+    enable_voice_input: false # (Target: v0.2.0)
+    enable_voice_output_tts: false # (Target: v0.2.0)
+    enable_vtuber_avatar: false # (Target: v0.3.0)
+
+    # === Phase 3: The Ghost in the Machine (Advanced) ===
+    enable_proactive_engagement: false # (Target: v0.4.0) Misa can start conversations first.
+    enable_internet_access_rag: false # (Target: v0.5.0) Misa can learn from the web.
+    enable_system_integration: false # (Target: v0.6.0) Misa can interact with Scovy's PC (e.g., check system status, open apps).
