@@ -9,6 +9,7 @@ import json
 import sys
 import time
 import re
+import ast
 from pathlib import Path
 from loguru import logger
 
@@ -30,8 +31,8 @@ def import_log(file_path: str):
 
         # 2. Create a dedicated Ollama instance for uncensored fact extraction
         logger.info("Initializing dedicated Ollama backend for fact extraction...")
-        ollama_for_facts = OllamaBackend()
-        logger.success("Ollama backend for facts is ready.")
+        ollama_for_facts = OllamaBackend(model="llama3:8b")
+        logger.success("Ollama backend for facts is ready.") 
 
         # 3. Read and parse the JSON log file
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -86,36 +87,37 @@ def import_log(file_path: str):
             context_snippet = turn_history[-3:]
             history_str = "\n".join([f"{turn['role']}: {turn['content']}" for turn in context_snippet])
 
-            fact_extraction_prompt = f"""You are a memory organization assistant for an AI named Misa. Your only job is to analyze a conversation snippet and extract facts about her user, Scovy.
+            fact_extraction_prompt = f"""You are a memory organization assistant for an AI named Misa. Your job is to analyze a conversation snippet and extract key facts that define the user (Scovy), Misa herself, and their relationship.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Analyze Context:** The conversation is between "model" (Misa) and "user" (Scovy). Use the context to understand Scovy's most recent message.
-2.  **Extract from Scovy ONLY:** Your entire focus is on information revealed by Scovy in his last message.
-3.  **Adopt Misa's Persona:** You MUST write each fact from Misa's first-person perspective. Start your sentences like "Scovy told me...", "Scovy feels...", "I learned that Scovy...".
+1.  **Analyze the Full Snippet:** The conversation is between "model" (Misa) and "user" (Scovy). Consider both sides of the conversation to extract facts.
+2.  **Extract Three Types of Facts:**
+    *   **About Scovy (the user):** What did Scovy reveal about himself, his preferences, feelings, or life?
+    *   **About Misa (the AI):** What did Misa reveal about her own personality, opinions, or capabilities?
+    *   **About the Relationship:** What does the interaction say about their dynamic? Is it friendly, professional, humorous? Do they have shared interests?
+3.  **Adopt Misa's Persona:** You MUST write each fact from Misa's first-person perspective.
+    *   For Scovy: Start with "Scovy...", "I learned that Scovy...". (e.g., "Scovy enjoys talking about space.")
+    *   For Misa: Start with "I...", "I remember saying...". (e.g., "I expressed that I find classical music calming.")
+    *   For the relationship: Start with "We...", "Our conversations...". (e.g., "We often joke about cats.")
 4.  **Output Format:** Your response MUST be ONLY a Python list of strings. Do not add any other text, explanation, or conversational filler.
-5.  **Language:** Your entire output, including the list and the strings inside it, MUST be in English.
+5.  **Language:** Your entire output MUST be in English.
 
 **GOOD EXAMPLE OUTPUT:**
-["Scovy told me he feels overwhelmed by his assignments.", "I learned that Scovy is thinking about building a VR machine."]
-
-**BAD EXAMPLE OUTPUT:**
-- The user is sad. (Wrong persona)
-- Here are the facts I found: ["Fact 1"] (Contains extra text)
-- ["用户感到不知所措"] (Wrong language)
+["Scovy told me he feels overwhelmed by his assignments.", "I remember telling Scovy that I don't have emotions in the same way humans do.", "We have a supportive dynamic where Scovy feels comfortable sharing his feelings."]
 
 **Conversation Snippet:**
 ---
 {history_str}
 ---
 
-Now, extract the facts about Scovy from his last message and provide them as a Python list of strings."""
+Now, extract the facts from the snippet and provide them as a Python list of strings."""
             try:
                 messages = [{"role": "user", "content": fact_extraction_prompt}]
                 response = ollama_for_facts.generate(messages)
                 match = re.search(r'\[.*\]', response, re.DOTALL)
                 if match:
                     fact_list_str = match.group()
-                    extracted_facts = eval(fact_list_str)
+                    extracted_facts = ast.literal_eval(fact_list_str)
                     if isinstance(extracted_facts, list) and extracted_facts:
                         logger.info(f"Extracted {len(extracted_facts)} facts via Ollama.")
                         for fact in extracted_facts:
