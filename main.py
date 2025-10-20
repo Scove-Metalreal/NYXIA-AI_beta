@@ -40,7 +40,7 @@ def main():
         from core.runtime import AssistantRuntime
 
         # Initialize runtime
-        runtime = AssistantRuntime()
+        runtime = AssistantRuntime(runtime_config_path="config/runtime_config.yaml")
 
         # Start interactive chat
         runtime.chat()

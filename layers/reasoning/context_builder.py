@@ -5,6 +5,7 @@ Reasoning Layer - Context Builder & Decision Engine
 import difflib
 from typing import List, Dict, Any, Optional
 from loguru import logger
+from layers.reasoning.nlu import NLUAnalyzer
 
 
 class ContextBuilder:
@@ -50,36 +51,11 @@ class DecisionEngine:
     """Makes decisions about the AI's behavior."""
     
     def __init__(self):
-        pass
+        self.nlu_analyzer = NLUAnalyzer()
     
     def analyze_user_emotion(self, user_input: str) -> Dict[str, Any]:
-        """Analyzes the user's emotion."""
-        text = user_input.lower()
-        
-        positive_words = ['happy', 'joy', 'great', 'good', 'like', 'love']
-        negative_words = ['sad', 'bad', 'annoyed', 'stress', 'anxious', 'hate']
-        
-        positive_count = sum(1 for word in positive_words if word in text)
-        negative_count = sum(1 for word in negative_words if word in text)
-        
-        if positive_count > negative_count:
-            sentiment = 0.6
-            emotion = "happy"
-        elif negative_count > positive_count:
-            sentiment = -0.6
-            emotion = "sad"
-        else:
-            sentiment = 0.0
-            emotion = "neutral"
-        
-        intensity_markers = ['very', 'extremely', 'so', 'incredibly']
-        intensity = 0.8 if any(marker in text for marker in intensity_markers) else 0.5
-        
-        return {
-            'sentiment': sentiment,
-            'emotion': emotion,
-            'intensity': intensity
-        }
+        """Analyzes the user's emotion using the NLUAnalyzer."""
+        return self.nlu_analyzer.analyze_text(user_input)
 
 
 class BehaviorRules:

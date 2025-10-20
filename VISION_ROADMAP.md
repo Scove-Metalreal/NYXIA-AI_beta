@@ -50,7 +50,7 @@ _Goal: Move beyond a simple chatbot to an AI that understands subtext and behave
 
 _Goal: Evolve the AI's emotion from a simple dictionary to a more robust, persistent state that feels more alive._
 
-**Sub-Task 1.1: Create a dedicated `EmotionalState` Class**
+- [x] **Sub-Task 1.1: Create a dedicated `EmotionalState` Class**
 
 - **What to do:** Refactor the current dictionary-based emotional state into a dedicated Python class.
 - **Files to Update:** Create a new file `layers/personality/emotion.py` and update `layers/personality/character.py`.
@@ -63,7 +63,7 @@ _Goal: Evolve the AI's emotion from a simple dictionary to a more robust, persis
 - **What to use:** Standard Python classes. You could use `pydantic` for data validation to make it more robust.
 - **Why:** A class encapsulates logic, prevents errors from typos in dictionary keys, and makes the emotional state easier to manage, save, and expand upon later.
 
-**Sub-Task 1.2: Implement Emotional Decay**
+- [x] **Sub-Task 1.2: Implement Emotional Decay**
 
 - **What to do:** Make Misa's emotions gradually return to a neutral baseline over time or between interactions.
 - **Files to Update:** The new `layers/personality/emotion.py` and the main chat loop in `core/runtime.py`.
@@ -78,7 +78,7 @@ _Goal: Evolve the AI's emotion from a simple dictionary to a more robust, persis
 
 *Goal: Allow Misa to understand not just what is said, but *how* it's said, including subtext and sarcasm.*
 
-**Sub-Task 2.1: Use a Specialized Model for Nuanced Analysis**
+- [x] **Sub-Task 2.1: Use a Specialized Model for Nuanced Analysis**
 
 - **What to do:** Instead of just getting a basic sentiment score, use a more powerful model to detect intent, specific emotions (e.g., 'frustration' vs. 'sadness'), and potential sarcasm.
 - **Files to Update:** `layers/reasoning/context_builder.py` (currently `DecisionEngine` is in there, might be worth splitting out to a new file `layers/reasoning/nlu.py`).

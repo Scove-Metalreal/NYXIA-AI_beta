@@ -1,0 +1,3 @@
+personality:
+  directory: "config/personalities"
+  default: "misa_loli"

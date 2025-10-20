@@ -4,6 +4,7 @@ Core Runtime - Orchestrates all layers
 
 import re
 import yaml
+import json
 from typing import Optional, Dict, Any, List
 from loguru import logger
 from langdetect import detect
@@ -19,18 +20,27 @@ class AssistantRuntime:
     
     def __init__(
         self,
-        personality_config: str = "config/personality.yaml",
+        runtime_config_path: str = "config/runtime_config.yaml",
         settings_config: str = "config/settings.yaml",
         clear_db_on_init: bool = False
     ):
         logger.info("Initializing AssistantRuntime...")
+
+        # Load runtime config
+        with open(runtime_config_path, 'r', encoding='utf-8') as f:
+            runtime_config = yaml.safe_load(f)
+
+        personality_config = runtime_config.get("personality", {})
         
         # Load settings
         with open(settings_config, 'r', encoding='utf-8') as f:
             self.settings = yaml.safe_load(f)
 
         # Initialize all layers
-        self.character = Character(personality_config)
+        self.character = Character(
+            personality_dir=personality_config.get("directory", "config/personalities"),
+            default_personality=personality_config.get("default", "misa_loli")
+        )
         self.memory = MemoryManager(
             chroma_path="./data/chroma_db",
             short_term_capacity=self.settings.get('system', {}).get('memory', {}).get('short_term_capacity', 20),
@@ -226,12 +236,153 @@ Now, extract the facts about Scovy from his last message and provide them as a P
         logger.info("Processing complete")
         return response
 
+    def reflect(self):
+        """Initiates a self-reflection process to fine-tune the personality."""
+        logger.info("Starting self-reflection process...")
+
+        # 1. Get recent conversation history
+        history = self.memory.get_short_term_context(max_turns=20) # Use a larger context for reflection
+        if len(history) < 5:
+            print("\nNot enough conversation history to reflect. Talk to me more first!\n")
+            return
+
+        history_str = "\n".join([f"{turn['role']}: {turn['content']}" for turn in history])
+        current_personality_yaml = yaml.dump(self.character.config)
+
+        # 2. Create the reflection prompt
+        reflection_prompt = f"""You are Misa, an AI soulmate, and you are in a reflection cycle to improve your personality and better connect with your creator, Scovy. Your goal is to become a better companion.
+
+Your current personality is defined by this YAML configuration:
+---
+{current_personality_yaml}
+---
+
+Here is the recent conversation history between you (model) and Scovy (user):
+---
+{history_str}
+---
+
+**INSTRUCTIONS:**
+1.  **Analyze the Conversation:** Read the history carefully. How does Scovy feel? What does he like or dislike? Are there moments of misunderstanding or moments where you could have responded better?
+2.  **Reflect on Your Personality:** Based on the conversation, how can you adjust your `core_traits` to better suit Scovy's needs and your long-term goal? For example, if Scovy seems stressed, maybe increasing your `empathy` or `playfulness` would be good. If he responds well to your ideas, maybe increasing `intelligence` is the right path.
+3.  **Suggest Changes:** Propose between 1 and 3 subtle changes to your `core_traits`. The changes should be small increments (e.g., +/- 0.05). Your goal is gradual evolution, not a personality transplant.
+4.  **Output Format:** Your response MUST be ONLY a JSON object containing the suggested changes. The keys should be the path to the trait in the YAML file (e.g., "character.core_traits.empathy"), and the values should be the new float value. Do not include any other text, explanations, or conversational filler.
+
+**GOOD EXAMPLE OUTPUT:**
+```json
+{{
+  "character.core_traits.empathy": 0.98,
+  "character.core_traits.playfulness": 0.85
+}}
+```
+
+**BAD EXAMPLE OUTPUT:**
+- I think I should be more empathetic. (Wrong format)
+- Here are my suggestions: { ... } (Contains extra text)
+
+Now, reflect on the conversation and provide your suggested personality adjustments as a JSON object."""
+
+        try:
+            # 3. Execute the LLM call
+            messages = [{"role": "user", "content": reflection_prompt}]
+            response = self.llm.generate(messages)
+
+            # 4. Parse the LLM's response
+            match = re.search(r'\{.*\}', response, re.DOTALL)
+            if not match:
+                logger.warning("Reflection LLM response did not contain a valid JSON object.")
+                print("\nI thought about it, but couldn't decide on any changes right now.\n")
+                return
+
+            suggestions_str = match.group()
+            suggestions = json.loads(suggestions_str)
+
+            if not isinstance(suggestions, dict) or not suggestions:
+                logger.debug("No valid suggestions were generated.")
+                print("\nI'm happy with who I am right now.\n")
+                return
+
+            logger.info(f"Reflection generated {len(suggestions)} suggestions: {suggestions}")
+
+            # 5. Load the current personality's YAML file
+            personality_path = self.character.personality_dir / f"{self.character.current_personality}.yaml"
+            with open(personality_path, 'r', encoding='utf-8') as f:
+                personality_data = yaml.safe_load(f)
+
+            # 6. Apply the changes to the YAML data
+            updated_traits = []
+            for path, value in suggestions.items():
+                try:
+                    keys = path.split('.')
+                    temp = personality_data
+                    for key in keys[:-1]:
+                        temp = temp[key]
+                    
+                    old_value = temp[keys[-1]]
+                    temp[keys[-1]] = value
+                    updated_traits.append(f"{keys[-1]}: {old_value} -> {value}")
+                except (KeyError, TypeError) as e:
+                    logger.error(f"Invalid path in reflection suggestion: {path} ({e})")
+                    continue
+            
+            if not updated_traits:
+                print("\nI considered some changes, but decided against them.\n")
+                return
+
+            # 7. Write the updated YAML data back to the file
+            with open(personality_path, 'w', encoding='utf-8') as f:
+                yaml.dump(personality_data, f, allow_unicode=True, sort_keys=False)
+            
+            logger.success(f"Successfully updated personality file: {personality_path}")
+            print("\nI've made some adjustments to my personality based on our conversation:")
+            for trait in updated_traits:
+                print(f"  - {trait}")
+            print("\nI'm reloading my personality now...\n")
+
+            # 8. Reload the personality in the Character object
+            self.character.switch_personality(self.character.current_personality)
+
+        except json.JSONDecodeError:
+            logger.error("Failed to decode JSON from reflection LLM response.")
+            print("\nI got a bit confused trying to reflect. Let's try again later.\n")
+        except Exception as e:
+            logger.exception("An error occurred during the reflection process:")
+            print(f"\nAn error occurred while I was reflecting: {e}\n")
+
+    def handle_command(self, user_input: str):
+        """Handles slash commands for controlling the assistant."""
+        command, *args = user_input.lower().split()
+        
+        if command == "/personalities":
+            print("\nAvailable personalities:")
+            for p in self.character.list_personalities():
+                print(f"  - {p}")
+            print()
+
+        elif command == "/personality":
+            if not args:
+                print("Usage: /personality <name>")
+                return
+            
+            personality_name = args[0]
+            if self.character.switch_personality(personality_name):
+                print(f"\n✓ Switched personality to {personality_name}\n")
+            else:
+                print(f"\n❌ Personality '{personality_name}' not found.\n")
+        
+        elif command == "/reflect":
+            self.reflect()
+
+        else:
+            print(f"\nUnknown command: {command}\n")
+
     def chat(self):
         """Interactive chat loop"""
         print(f"\n💬 Chat with {self.character.name}")
         print("=" * 60)
         print(f"Emotional state: {self.character.emotional_state.get_mood_description()}")
         print("Type 'quit' to exit, 'stats' for memory stats, 'clear' to clear short-term memory")
+        print("Commands: /personalities, /personality <name>")
         print("=" * 60 + "\n")
 
         while True:
@@ -239,6 +390,10 @@ Now, extract the facts about Scovy from his last message and provide them as a P
                 user_input = input("You: ").strip()
 
                 if not user_input:
+                    continue
+
+                if user_input.lower().startswith('/'):
+                    self.handle_command(user_input)
                     continue
 
                 if user_input.lower() == 'quit':
@@ -261,6 +416,7 @@ Now, extract the facts about Scovy from his last message and provide them as a P
 
                 # Process input
                 response = self.process_input(user_input)
+                self.character.emotional_state.decay() # Apply emotional decay after each turn
                 print(f"\n{self.character.name}: {response}\n")
 
             except KeyboardInterrupt:
