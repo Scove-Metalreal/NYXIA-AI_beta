@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+# Add project root to the Python path
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
 import pytest
 from layers.personality.emotion import EmotionalState
 from layers.reasoning.nlu import NLUAnalyzer
@@ -113,3 +120,4 @@ def test_character_emotion_update_from_nlu():
     current_affection = character.emotional_state.affection
     character.update_emotion_from_user_input(personal_input, sentiment=nlu_analysis["sentiment"]["score"])
     assert character.emotional_state.affection > current_affection
+

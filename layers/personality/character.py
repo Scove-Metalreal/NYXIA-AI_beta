@@ -71,17 +71,20 @@ class Character:
         }
 
     def _initialize_emotional_state(self):
-        """Initializes the emotional state from the config."""
+        """Initializes the emotional state from the config, passing the config for dynamic calculations."""
         try:
             initial = self.config["character"]["emotional_system"]["initial_state"]
+            # Pass the full personality config to the constructor for dynamic baseline calculation
             self.emotional_state = EmotionalState(
+                personality_config=self.config,
                 mood=initial.get("mood", 70.0),
                 energy=initial.get("energy", 80.0),
                 affection=initial.get("affection", 50.0),
                 stress=initial.get("stress", 20.0)
             )
         except KeyError:
-            logger.warning("Using default emotional state")
+            logger.warning("Using default emotional state but passing config for dynamics.")
+            self.emotional_state = EmotionalState(personality_config=self.config)
 
     @property
     def name(self) -> str:

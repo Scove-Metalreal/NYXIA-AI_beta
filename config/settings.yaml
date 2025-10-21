@@ -49,6 +49,6 @@ system:
     enable_vtuber_avatar: false # (Target: v0.3.0)
 
     # === Phase 3: The Ghost in the Machine (Advanced) ===
-    enable_proactive_engagement: false # (Target: v0.4.0) Misa can start conversations first.
+    enable_proactive_engagement: true # (Target: v0.4.0) Misa can start conversations first.
     enable_internet_access_rag: false # (Target: v0.5.0) Misa can learn from the web.
     enable_system_integration: false # (Target: v0.6.0) Misa can interact with Scovy's PC (e.g., check system status, open apps).

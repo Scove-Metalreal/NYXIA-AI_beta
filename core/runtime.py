@@ -1,16 +1,17 @@
-"""
-Core Runtime - Orchestrates all layers
-"""
+"Core Runtime - Orchestrates all layers"
 
 import re
 import yaml
 import json
+import time
+import threading
 from typing import Optional, Dict, Any, List
 from loguru import logger
 from langdetect import detect
 from layers.personality.character import Character
 from layers.memory.memory_manager import MemoryManager
 from layers.reasoning.context_builder import ContextBuilder, DecisionEngine, BehaviorRules
+from core.action_executor import ActionExecutor
 from layers.llm.ollama_backend import OllamaBackend
 from layers.llm.gemini_backend import GeminiBackend
 
@@ -49,6 +50,11 @@ class AssistantRuntime:
         self.context_builder = ContextBuilder()
         self.decision_engine = DecisionEngine()
         self.behavior_rules = BehaviorRules()
+        self.action_executor = ActionExecutor(character_name=self.character.name)
+        
+        # Proactive behavior setup
+        self.proactive_thread = None
+        self.stop_proactive_loop = threading.Event()
         
         # Dynamically load the LLM backend
         llm_config = self.settings.get('system', {}).get('llm', {})
@@ -115,9 +121,9 @@ class AssistantRuntime:
         fact_extraction_prompt = f"""You are a memory organization assistant for an AI named Misa. Your only job is to analyze a conversation snippet and extract facts about her user, Scovy.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Analyze Context:** The conversation is between "model" (Misa) and "user" (Scovy). Use the context to understand Scovy's most recent message.
+1.  **Analyze Context:** The conversation is between \"model\" (Misa) and \"user\" (Scovy). Use the context to understand Scovy's most recent message.
 2.  **Extract from Scovy ONLY:** Your entire focus is on information revealed by Scovy in his last message.
-3.  **Adopt Misa's Persona:** You MUST write each fact from Misa's first-person perspective. Start your sentences like "Scovy told me...", "Scovy feels...", "I learned that Scovy...".
+3.  **Adopt Misa's Persona:** You MUST write each fact from Misa's first-person perspective. Start your sentences like \"Scovy told me...\", \"Scovy feels...\", \"I learned that Scovy...\".
 4.  **Output Format:** Your response MUST be ONLY a Python list of strings. Do not add any other text, explanation, or conversational filler.
 5.  **Language:** Your entire output, including the list and the strings inside it, MUST be in English.
 
@@ -140,7 +146,7 @@ Now, extract the facts about Scovy from his last message and provide them as a P
             messages = [{"role": "user", "content": fact_extraction_prompt}]
             response = self.llm.generate(messages)
 
-            match = re.search(r'\[.*\]', response, re.DOTALL)
+            match = re.search(r'[[.*]]', response, re.DOTALL)
             if not match:
                 logger.debug("No fact list found in LLM response for fact extraction.")
                 return
@@ -177,7 +183,7 @@ Now, extract the facts about Scovy from his last message and provide them as a P
         # 3. Update character's emotional state
         self.character.update_emotion_from_user_input(
                 user_input,
-                sentiment=user_emotion['sentiment']
+                sentiment=user_emotion['sentiment']['score']
             )
             
         # 4. Retrieve relevant memories
@@ -278,7 +284,7 @@ Here is the recent conversation history between you (model) and Scovy (user):
 
 **BAD EXAMPLE OUTPUT:**
 - I think I should be more empathetic. (Wrong format)
-- Here are my suggestions: { ... } (Contains extra text)
+- Here are my suggestions: {{ ... }} (Contains extra text)
 
 Now, reflect on the conversation and provide your suggested personality adjustments as a JSON object."""
 
@@ -288,7 +294,7 @@ Now, reflect on the conversation and provide your suggested personality adjustme
             response = self.llm.generate(messages)
 
             # 4. Parse the LLM's response
-            match = re.search(r'\{.*\}', response, re.DOTALL)
+            match = re.search(r'\\{.*\\}', response, re.DOTALL)
             if not match:
                 logger.warning("Reflection LLM response did not contain a valid JSON object.")
                 print("\nI thought about it, but couldn't decide on any changes right now.\n")
@@ -347,7 +353,7 @@ Now, reflect on the conversation and provide your suggested personality adjustme
             print("\nI got a bit confused trying to reflect. Let's try again later.\n")
         except Exception as e:
             logger.exception("An error occurred during the reflection process:")
-            print(f"\nAn error occurred while I was reflecting: {e}\n")
+            print(f"\n❌ Error: {e}\n")
 
     def handle_command(self, user_input: str):
         """Handles slash commands for controlling the assistant."""
@@ -376,6 +382,32 @@ Now, reflect on the conversation and provide your suggested personality adjustme
         else:
             print(f"\nUnknown command: {command}\n")
 
+    def _proactive_loop(self):
+        """Periodically checks for and executes proactive behaviors."""
+        logger.info("Proactive behavior loop started.")
+        while not self.stop_proactive_loop.is_set():
+            try:
+                logger.debug("Proactive loop iteration started.")
+                if self.settings.get('system', {}).get('features', {}).get('enable_proactive_engagement', False):
+                    logger.debug("Checking for spontaneous action...")
+                    action = self.character.emotional_state.get_spontaneous_action()
+                    if action:
+                        logger.debug(f"Found action: {action}. Executing...")
+                        self.action_executor.execute(action)
+                    else:
+                        logger.debug("No spontaneous action triggered.")
+                
+                logger.debug("Proactive loop waiting...")
+                # Use the event's wait method for a non-blocking sleep
+                self.stop_proactive_loop.wait(30) # Check every 30 seconds
+                logger.debug("Proactive loop wait finished.")
+            except Exception as e:
+                # If this is the special exception from the test, re-raise it to stop the test
+                if str(e) == "Stop Loop":
+                    raise
+                logger.error(f"Error in proactive loop: {e}")
+                self.stop_proactive_loop.wait(60) # Wait longer if there's an error
+
     def chat(self):
         """Interactive chat loop"""
         print(f"\n💬 Chat with {self.character.name}")
@@ -385,8 +417,15 @@ Now, reflect on the conversation and provide your suggested personality adjustme
         print("Commands: /personalities, /personality <name>")
         print("=" * 60 + "\n")
 
-        while True:
-            try:
+        # Start proactive loop in a background thread if enabled
+        if self.settings.get('system', {}).get('features', {}).get('enable_proactive_engagement', False):
+            self.stop_proactive_loop.clear()
+            self.proactive_thread = threading.Thread(target=self._proactive_loop, daemon=True)
+            self.proactive_thread.start()
+            logger.info("Proactive behavior thread started.")
+
+        try:
+            while True:
                 user_input = input("You: ").strip()
 
                 if not user_input:
@@ -406,7 +445,7 @@ Now, reflect on the conversation and provide your suggested personality adjustme
                     print(f"  Short-term: {stats['short_term_size']} turns")
                     print(f"  Episodic: {stats['episodic_count']} memories")
                     print(f"  Semantic: {stats['semantic_count']} facts")
-                    print(f"  Emotional state: {self.character.emotional_state.to_dict()}\n")
+                    print(f"  Emotional state: {self.character.emotional_state}\n")
                     continue
 
                 if user_input.lower() == 'clear':
@@ -419,12 +458,18 @@ Now, reflect on the conversation and provide your suggested personality adjustme
                 self.character.emotional_state.decay() # Apply emotional decay after each turn
                 print(f"\n{self.character.name}: {response}\n")
 
-            except KeyboardInterrupt:
-                print(f"\n\n👋 {self.character.name}: See you later!")
-                break
-            except Exception as e:
-                logger.exception("Error in chat loop:")
-                print(f"\n❌ Error: {e}\n")
+        except KeyboardInterrupt:
+            print(f"\n\n👋 {self.character.name}: See you later!")
+        except Exception as e:
+            logger.exception("Error in chat loop:")
+            print(f"\n❌ Error: {e}\n")
+        finally:
+            # Stop the proactive loop
+            self.stop_proactive_loop.set()
+            if self.proactive_thread and self.proactive_thread.is_alive():
+                logger.info("Stopping proactive behavior thread...")
+                self.proactive_thread.join(timeout=5)
+                logger.info("Proactive behavior thread stopped.")
 
     def get_stats(self) -> Dict[str, Any]:
         """Get runtime statistics"""
